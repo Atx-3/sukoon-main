@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sukoon - Health Companion</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* Custom styles to make it feel more like a native app */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .mobile-container {
+            max-width: 420px;
+            height: 896px;
+            margin: auto;
+            border: 8px solid #1a202c;
+            border-radius: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+            background-color: #f8fafc;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+
+        .nav-item.active svg, .nav-item.active p { color: #2563eb; }
+        
+        #sos-progress { transition: width 0.5s ease-in-out; }
+        #sos-button-container { transition: transform 0.3s ease-in-out; }
+        #sos-button-container.keyboard-visible { transform: translateY(-80px); }
+        #sos-button-container.recording { transform: translateY(-60px); }
+
+
+        /* Animation for screen transitions */
+        .page, .overlay {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .otp-input {
+            width: 40px;
+            height: 40px;
+            text-align: center;
+            font-size: 1.25rem;
+            border: 2px solid #d1d5db;
+            border-radius: 0.5rem;
+            margin: 0 4px;
+        }
+        #user-video, #camera-preview {
+            transform: scaleX(-1); /* Mirror effect for front camera */
+        }
+        .call-btn.active {
+            background-color: #3b82f6; /* Blue-500 */
+        }
+        .graph-tab.active, .sub-tab-button.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-200 flex items-center justify-center min-h-screen">
+
+    <div class="mobile-container">
+        <div id="app-container" class="w-full h-full flex flex-col">
+            </div>
+        <div id="overlay-container"></div>
+    </div>
+
+    <template id="splash-screen-template">
+        <div class="w-full h-full flex flex-col items-center justify-center bg-blue-600 text-white">
+            <i data-lucide="heart-pulse" class="w-24 h-24 mb-4 animate-pulse"></i>
+            <h1 class="text-4xl font-bold">Sukoon</h1>
+            <p class="text-lg mt-2">Jiyo Sukoon Se</p>
+        </div>
+    </template>
+
+    <template id="login-screen-template">
+        <div class="w-full h-full flex flex-col justify-center items-center p-8 bg-gray-50 page">
+            <i data-lucide="heart-pulse" class="w-16 h-16 text-blue-600 mb-4"></i>
+            <h1 class="text-3xl font-bold text-gray-800">Welcome to Sukoon</h1>
+            <p class="text-gray-500 mb-8">Your personal health companion.</p>
+            <div class="w-full space-y-4">
+                <button id="google-login-btn" class="w-full bg-white border border-gray-300 text-gray-700 font-semibold py-3 rounded-xl flex items-center justify-center shadow-sm">
+                    <img src="https://www.google.com/favicon.ico" class="w-5 h-5 mr-3" alt="Google icon">
+                    Continue with Google
+                </button>
+                 <button id="apple-login-btn" class="w-full bg-black text-white font-semibold py-3 rounded-xl flex items-center justify-center shadow-sm">
+                    <i data-lucide="apple" class="w-5 h-5 mr-3 fill-white"></i>
+                    Continue with Apple
+                </button>
+                <button id="phone-login-btn" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl shadow-sm">
+                    Continue with Phone Number
+                </button>
+            </div>
+        </div>
+    </template>
+    
+    <template id="email-login-template">
+        <div class="w-full h-full flex flex-col justify-center p-8 bg-gray-50 page">
+            <button class="back-to-login absolute top-8 left-6 text-gray-600"><i data-lucide="arrow-left"></i></button>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">Enter your Email</h1>
+            <p class="text-gray-500 mb-6" id="email-provider-text">to continue with Google</p>
+            <input id="email-input" type="email" placeholder="you@example.com" class="w-full border border-gray-300 p-3 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <button id="email-next-btn" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl shadow-sm disabled:bg-gray-400">Next</button>
+        </div>
+    </template>
+
+    <template id="phone-login-template">
+        <div class="w-full h-full flex flex-col justify-center p-8 bg-gray-50 page">
+            <button class="back-to-login absolute top-8 left-6 text-gray-600"><i data-lucide="arrow-left"></i></button>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">Enter your Phone</h1>
+            <p class="text-gray-500 mb-6">We'll send you a confirmation code.</p>
+            <div class="flex items-center w-full border border-gray-300 p-3 rounded-xl mb-4 focus-within:ring-2 focus-within:ring-blue-500">
+                <span class="font-semibold text-gray-600 mr-2">+91</span>
+                <input id="phone-input" type="tel" placeholder="98765 43210" class="w-full focus:outline-none">
+            </div>
+            <button id="phone-next-btn" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl shadow-sm disabled:bg-gray-400">Send OTP</button>
+        </div>
+    </template>
+    
+    <template id="otp-template">
+        <div class="w-full h-full flex flex-col justify-center p-8 bg-gray-50 page">
+            <button class="back-to-phone-login absolute top-8 left-6 text-gray-600"><i data-lucide="arrow-left"></i></button>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">Enter Code</h1>
+            <p class="text-gray-500 mb-6">We sent a code to <span id="user-phone-display" class="font-semibold"></span>.</p>
+            <div id="otp-inputs" class="flex justify-center mb-6">
+                <input type="number" class="otp-input" maxlength="1">
+                <input type="number" class="otp-input" maxlength="1">
+                <input type="number" class="otp-input" maxlength="1">
+                <input type="number" class="otp-input" maxlength="1">
+            </div>
+            <button id="otp-next-btn" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl shadow-sm disabled:bg-gray-400">Verify</button>
+        </div>
+    </template>
+
+
+    <template id="main-app-template">
+        <main id="main-content" class="flex-grow overflow-y-auto custom-scrollbar pb-20">
+            </main>
+        <nav class="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center h-20 rounded-b-[32px]">
+            <a href="#" class="nav-item text-center text-gray-500 flex flex-col items-center justify-center w-1/5" data-page="home">
+                <i data-lucide="home"></i><p class="text-xs mt-1">Home</p>
+            </a>
+            <a href="#" class="nav-item text-center text-gray-500 flex flex-col items-center justify-center w-1/5" data-page="plan">
+                <i data-lucide="clipboard-list"></i><p class="text-xs mt-1">My Plan</p>
+            </a>
+            <a href="#" class="nav-item text-center text-gray-500 flex flex-col items-center justify-center w-1/5" data-page="coach-list">
+                <i data-lucide="users"></i><p class="text-xs mt-1">Coaches</p>
+            </a>
+            <a href="#" class="nav-item text-center text-gray-500 flex flex-col items-center justify-center w-1/5" data-page="vitals">
+                <i data-lucide="heart-pulse"></i><p class="text-xs mt-1">Vitals</p>
+            </a>
+            <a href="#" class="nav-item text-center text-gray-500 flex flex-col items-center justify-center w-1/5" data-page="profile">
+                <i data-lucide="user"></i><p class="text-xs mt-1">Profile</p>
+            </a>
+        </nav>
+        <div id="sos-button-container" class="absolute bottom-24 right-4 z-20">
+            <button id="sos-button" class="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg transform transition-transform active:scale-90">
+                <div class="absolute top-0 left-0 w-full h-full bg-red-700 rounded-full opacity-50" id="sos-progress" style="width: 0%;"></div>
+                <span class="relative z-10 font-bold text-lg">SOS</span>
+            </button>
+        </div>
+        <div id="message-box" class="hidden absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-8">
+            <div class="bg-white p-6 rounded-2xl shadow-xl text-center">
+                <h3 class="text-xl font-bold text-gray-800 mb-2">Emergency Alert</h3>
+                <p class="text-gray-600 mb-4">Help is on the way. Your emergency contacts and our team have been notified.</p>
+                <button id="close-message-box" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold">Okay</button>
+            </div>
+        </div>
+    </template>
+
+    <template id="home-page">
+        <div class="p-6 page">
+            <header class="flex justify-between items-center mb-6"><div><p class="text-gray-500">Good Morning,</p><h1 class="text-2xl font-bold text-gray-800">Ayush</h1></div><div class="w-12 h-12 bg-gray-200 rounded-full"><img src="https://placehold.co/48x48/E2E8F0/4A5568?text=A" alt="User Avatar" class="rounded-full"></div></header>
+            <div class="mb-6"><h2 class="text-lg font-semibold text-gray-700 mb-3">Today's Vitals</h2><div class="grid grid-cols-2 gap-4"><div class="bg-blue-50 p-4 rounded-2xl flex items-center"><i data-lucide="bed-double" class="text-blue-500 w-8 h-8 mr-3"></i><div><p class="text-sm text-gray-600">Sleep</p><p class="font-bold text-gray-800">7h 45m</p></div></div><div class="bg-green-50 p-4 rounded-2xl flex items-center"><i data-lucide="heart-pulse" class="text-green-500 w-8 h-8 mr-3"></i><div><p class="text-sm text-gray-600">Heart Rate</p><p class="font-bold text-gray-800">68 bpm</p></div></div><div class="bg-yellow-50 p-4 rounded-2xl flex items-center"><i data-lucide="smile" class="text-yellow-500 w-8 h-8 mr-3"></i><div><p class="text-sm text-gray-600">Stress</p><p class="font-bold text-gray-800">Low</p></div></div><div class="bg-purple-50 p-4 rounded-2xl flex items-center"><i data-lucide="footprints" class="text-purple-500 w-8 h-8 mr-3"></i><div><p class="text-sm text-gray-600">Steps</p><p class="font-bold text-gray-800">4,120</p></div></div></div></div>
+            <a href="#" class="plan-item-link block bg-blue-600 text-white p-4 rounded-2xl mb-6 flex items-start shadow-lg" data-page="ai-insights"><i data-lucide="brain-circuit" class="w-10 h-10 mr-4 mt-1 flex-shrink-0"></i><div><h3 class="font-bold">AI Insight</h3><p class="text-sm text-blue-100">We noticed your sleep was disturbed around 3 AM. Tap to see more details.</p></div></a>
+            <div><h2 class="text-lg font-semibold text-gray-700 mb-3">Your Plan for Today</h2><div class="space-y-3">
+                <div class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm"><div class="flex items-center"><div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-4"><i data-lucide="pill" class="text-red-500"></i></div><div><p class="font-semibold text-gray-800">Take BP Medicine</p><p class="text-sm text-gray-500">8:00 AM</p></div></div><input type="checkbox" class="h-6 w-6 rounded-full text-blue-600 border-gray-300 focus:ring-blue-500"></div>
+                <a href="#" class="plan-item-link" data-page="meal-detail" data-item='{"name":"Lunch: Moong Dal Chilla","time":"1:00 PM","calories":"~250 kcal","details":"Rich in protein and low in carbs. Helps in maintaining steady blood sugar levels and keeps you full for longer.","icon":"salad","color":"green"}'>
+                    <div class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm"><div class="flex items-center"><div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-4"><i data-lucide="salad" class="text-green-500"></i></div><div><p class="font-semibold text-gray-800">Lunch: Moong Dal Chilla</p><p class="text-sm text-gray-500">1:00 PM</p></div></div><i data-lucide="chevron-right" class="text-gray-400"></i></div>
+                </a>
+                <a href="#" class="plan-item-link" data-page="workout-detail" data-item='{"name":"Evening Workout","time":"6:00 PM", "details": "A 15-minute bodyweight routine to improve cardiovascular health and build strength.", "poses": [{"name":"Jumping Jacks", "duration":"1 min"}, {"name":"Squats", "duration":"3x12 reps"}, {"name":"Push-ups", "duration":"3x8 reps"}], "icon":"dumbbell","color":"purple"}'>
+                    <div class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm"><div class="flex items-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-4"><i data-lucide="dumbbell" class="text-purple-500"></i></div><div><p class="font-semibold text-gray-800">Evening Workout</p><p class="text-sm text-gray-500">6:00 PM</p></div></div><i data-lucide="chevron-right" class="text-gray-400"></i></div>
+                </a>
+            </div></div>
+        </div>
+    </template>
+    <template id="plan-page">
+        <div class="p-6 page">
+            <h1 class="text-2xl font-bold text-gray-800 mb-6">My Plan</h1>
+            <div class="mb-4">
+                <div class="flex border-b border-gray-200">
+                    <button class="tab-button flex-1 py-2 text-center font-semibold text-blue-600 border-b-2 border-blue-600" data-tab="diet">Diet</button>
+                    <button class="tab-button flex-1 py-2 text-center font-semibold text-gray-500" data-tab="workout">Workout</button>
+                </div>
+            </div>
+            <div id="diet-content" class="tab-content space-y-4">
+                <h3 class="font-semibold text-lg text-gray-700">Today's Meals</h3>
+                <a href="#" class="plan-item-link" data-page="meal-detail" data-item='{"name":"Breakfast: Poha","time":"8:30 AM","calories":"~200 kcal","details":"A light and healthy option, rich in carbohydrates for sustained energy throughout the morning."}'>
+                    <div class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm"><div><p class="font-semibold text-gray-800">Breakfast: Poha with peanuts</p><p class="text-sm text-gray-500">8:30 AM</p></div><i data-lucide="chevron-right" class="text-gray-400"></i></div>
+                </a>
+                <a href="#" class="plan-item-link" data-page="meal-detail" data-item='{"name":"Lunch: Moong Dal Chilla","time":"1:00 PM","calories":"~250 kcal","details":"Rich in protein and low in carbs. Helps in maintaining steady blood sugar levels and keeps you full for longer."}'>
+                    <div class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm"><div><p class="font-semibold text-gray-800">Lunch: Moong Dal Chilla</p><p class="text-sm text-gray-500">1:00 PM</p></div><i data-lucide="chevron-right" class="text-gray-400"></i></div>
+                </a>
+                <a href="#" class="plan-item-link" data-page="meal-detail" data-item='{"name":"Dinner: Khichdi","time":"7:30 PM","calories":"~300 kcal","details":"Easy to digest and provides essential nutrients. A perfect light meal for the end of the day to promote good sleep."}'>
+                    <div class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm"><div><p class="font-semibold text-gray-800">Dinner: Low GI Khichdi</p><p class="text-sm text-gray-500">7:30 PM</p></div><i data-lucide="chevron-right" class="text-gray-400"></i></div>
+                </a>
+            </div>
+            <div id="workout-content" class="tab-content hidden space-y-4">
+                <h3 class="font-semibold text-lg text-gray-700">Today's Workouts</h3>
+                 <a href="#" class="plan-item-link" data-page="workout-detail" data-item='{"name":"Morning Yoga","time":"7:00 AM", "details": "A 10-minute yoga session to energize your body and mind for the day.", "poses": [{"name":"Sun Salutation", "duration":"5 rounds"}, {"name":"Warrior II", "duration":"30s each side"}]}'>
+                    <div class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm"><div><p class="font-semibold text-gray-800">Morning Yoga</p><p class="text-sm text-gray-500">10 minutes</p></div><i data-lucide="chevron-right" class="text-gray-400"></i></div>
+                </a>
+                <a href="#" class="plan-item-link" data-page="workout-detail" data-item='{"name":"Evening Workout","time":"6:00 PM", "details": "A 15-minute bodyweight routine to improve cardiovascular health and build strength.", "poses": [{"name":"Jumping Jacks", "duration":"1 min"}, {"name":"Squats", "duration":"3x12 reps"}, {"name":"Push-ups", "duration":"3x8 reps"}]}'>
+                    <div class="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm"><div><p class="font-semibold text-gray-800">Evening: Bodyweight Strength</p><p class="text-sm text-gray-500">15 minutes</p></div><i data-lucide="chevron-right" class="text-gray-400"></i></div>
+                </a>
+            </div>
+        </div>
+    </template>
+    <template id="coach-list-page">
+        <div class="p-6 page"><h1 class="text-2xl font-bold text-gray-800 mb-6">Your Care Team</h1><div class="space-y-4">
+            <a href="#" class="coach-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-coach='{"name": "Priya Singh", "title": "Personal Care Taker", "avatar": "P", "color": "bg-blue-100"}'>
+                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mr-4 font-bold text-lg">P</div><div><p class="font-semibold text-gray-800">Priya Singh</p><p class="text-sm text-gray-500">Personal Care Taker</p></div><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <a href="#" class="coach-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-coach='{"name": "Rahul Verma", "title": "Dietitian", "avatar": "R", "color": "bg-green-100"}'>
+                <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mr-4 font-bold text-lg">R</div><div><p class="font-semibold text-gray-800">Rahul Verma</p><p class="text-sm text-gray-500">Dietitian</p></div><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <a href="#" class="coach-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-coach='{"name": "Dr. Anjali", "title": "Therapist", "avatar": "A", "color": "bg-purple-100"}'>
+                <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mr-4 font-bold text-lg">A</div><div><p class="font-semibold text-gray-800">Dr. Anjali</p><p class="text-sm text-gray-500">Therapist</p></div><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <a href="#" class="coach-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-coach='{"name": "Vikram Rathod", "title": "Fitness Trainer", "avatar": "V", "color": "bg-yellow-100"}'>
+                <div class="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mr-4 font-bold text-lg">V</div><div><p class="font-semibold text-gray-800">Vikram Rathod</p><p class="text-sm text-gray-500">Fitness Trainer</p></div><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+        </div></div>
+    </template>
+    <template id="coach-chat-page">
+        <div class="flex flex-col h-full page">
+            <header class="p-4 border-b bg-white flex items-center sticky top-0 z-10">
+                <button class="back-button-chat p-2 -ml-2"><i data-lucide="arrow-left"></i></button>
+                <img id="chat-avatar" src="https://placehold.co/40x40/E2E8F0/4A5568?text=C" alt="Coach Avatar" class="rounded-full mr-3 ml-2">
+                <div>
+                    <h1 id="chat-name" class="text-lg font-bold text-gray-800">Coach</h1>
+                    <p id="chat-status" class="text-sm text-green-500">Online</p>
+                </div>
+                <div class="ml-auto flex space-x-4">
+                    <button id="audio-call-btn"><i data-lucide="phone" class="text-gray-600"></i></button>
+                    <button id="video-call-btn"><i data-lucide="video" class="text-gray-600"></i></button>
+                </div>
+            </header>
+            <div id="chat-history" class="flex-grow p-4 space-y-4 overflow-y-auto">
+                <div class="flex justify-start">
+                    <div class="bg-gray-200 p-3 rounded-2xl rounded-bl-lg max-w-xs">
+                        <p class="text-gray-800">Hi Ayush! How can I help you today?</p>
+                        <p class="text-xs text-gray-500 text-right mt-1">9:05 AM</p>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <div class="bg-blue-600 text-white p-3 rounded-2xl rounded-br-lg max-w-xs">
+                        <p>Hey! I have a question about my diet plan.</p>
+                        <p class="text-xs text-blue-200 text-right mt-1">9:07 AM</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-2 bg-white border-t">
+                <div id="voice-note-ui" class="hidden items-center p-2">
+                    <button id="delete-record-btn"><i data-lucide="trash-2" class="text-red-500"></i></button>
+                    <div class="flex-1 text-center text-gray-600" id="voice-note-timer">00:00</div>
+                    <button id="stop-record-btn" class="text-blue-600 font-semibold px-2">Send</button>
+                </div>
+                <div id="text-input-ui" class="flex items-center space-x-2">
+                    <div class="flex-grow flex items-center bg-gray-100 rounded-full p-2">
+                        <button id="attach-btn" class="p-1 text-gray-600"><i data-lucide="paperclip"></i></button>
+                        <input id="chat-input" type="text" placeholder="Type a message..." class="flex-grow bg-transparent focus:outline-none px-2">
+                        <button id="camera-btn" class="p-1 text-gray-600"><i data-lucide="camera"></i></button>
+                    </div>
+                    <button id="mic-or-send-btn" class="bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="mic" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <input type="file" id="file-input" class="hidden">
+        </div>
+    </template>
+    <template id="vitals-page">
+        <div class="p-6 page">
+            <h1 class="text-2xl font-bold text-gray-800 mb-6">Your Vitals</h1>
+            <div class="grid grid-cols-2 gap-4">
+                <a href="#" class="vital-card block bg-white p-4 rounded-2xl shadow-sm" data-vital="heart-rate">
+                    <div class="flex items-center text-red-500 mb-2"><i data-lucide="heart-pulse" class="w-6 h-6 mr-2"></i><h3 class="font-semibold">Heart Rate</h3></div>
+                    <p class="text-2xl font-bold text-gray-800">68 <span class="text-base font-normal">bpm</span></p>
+                    <p class="text-sm text-gray-500">Resting</p>
+                </a>
+                <a href="#" class="vital-card block bg-white p-4 rounded-2xl shadow-sm" data-vital="blood-oxygen">
+                    <div class="flex items-center text-blue-500 mb-2"><i data-lucide="wind" class="w-6 h-6 mr-2"></i><h3 class="font-semibold">Blood Oxygen</h3></div>
+                    <p class="text-2xl font-bold text-gray-800">98 <span class="text-base font-normal">%</span></p>
+                    <p class="text-sm text-gray-500">Normal</p>
+                </a>
+                 <a href="#" class="vital-card block bg-white p-4 rounded-2xl shadow-sm" data-vital="sleep">
+                    <div class="flex items-center text-indigo-500 mb-2"><i data-lucide="bed-double" class="w-6 h-6 mr-2"></i><h3 class="font-semibold">Sleep</h3></div>
+                    <p class="text-2xl font-bold text-gray-800">7h 45m</p>
+                    <p class="text-sm text-gray-500">Good Quality</p>
+                </a>
+                <a href="#" class="vital-card block bg-white p-4 rounded-2xl shadow-sm" data-vital="stress">
+                    <div class="flex items-center text-yellow-500 mb-2"><i data-lucide="brain" class="w-6 h-6 mr-2"></i><h3 class="font-semibold">Stress</h3></div>
+                    <p class="text-2xl font-bold text-gray-800">Low</p>
+                    <p class="text-sm text-gray-500">Last measured</p>
+                </a>
+                <a href="#" class="vital-card block bg-white p-4 rounded-2xl shadow-sm" data-vital="body-temp">
+                    <div class="flex items-center text-orange-500 mb-2"><i data-lucide="thermometer" class="w-6 h-6 mr-2"></i><h3 class="font-semibold">Body Temp</h3></div>
+                    <p class="text-2xl font-bold text-gray-800">36.8 <span class="text-base font-normal">°C</span></p>
+                    <p class="text-sm text-gray-500">Normal</p>
+                </a>
+                 <a href="#" class="vital-card block bg-white p-4 rounded-2xl shadow-sm" data-vital="respiration">
+                    <div class="flex items-center text-green-500 mb-2"><i data-lucide="lungs" class="w-6 h-6 mr-2"></i><h3 class="font-semibold">Respiration</h3></div>
+                    <p class="text-2xl font-bold text-gray-800">16 <span class="text-base font-normal">br/min</span></p>
+                    <p class="text-sm text-gray-500">Resting</p>
+                </a>
+            </div>
+        </div>
+    </template>
+    
+    <template id="profile-page">
+        <div class="p-6 page"><h1 class="text-2xl font-bold text-gray-800 mb-6">Profile & Settings</h1><div class="space-y-3">
+            <a href="#" class="profile-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-page="connect-wearable"><i data-lucide="watch" class="text-gray-500 w-6 h-6 mr-4"></i><p class="font-semibold text-gray-700">Connect Wearable</p><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <a href="#" class="profile-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-page="my-doctors"><i data-lucide="stethoscope" class="text-gray-500 w-6 h-6 mr-4"></i><p class="font-semibold text-gray-700">My Doctors</p><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <a href="#" class="profile-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-page="medicine-cabinet"><i data-lucide="pill" class="text-gray-500 w-6 h-6 mr-4"></i><p class="font-semibold text-gray-700">Medicine Cabinet</p><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <a href="#" class="profile-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-page="second-opinion"><i data-lucide="shield-plus" class="text-gray-500 w-6 h-6 mr-4"></i><p class="font-semibold text-gray-700">Request Second Opinion</p><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <a href="#" class="profile-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-page="emergency-contacts"><i data-lucide="contact" class="text-gray-500 w-6 h-6 mr-4"></i><p class="font-semibold text-gray-700">Emergency Contacts</p><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <a href="#" class="profile-item bg-white p-4 rounded-2xl shadow-sm flex items-center" data-page="contact-us"><i data-lucide="phone-call" class="text-gray-500 w-6 h-6 mr-4"></i><p class="font-semibold text-gray-700">Contact Us</p><i data-lucide="chevron-right" class="text-gray-400 ml-auto"></i></a>
+            <div class="pt-6 text-center"><button id="logout-button" class="text-red-500 font-semibold">Log Out</button></div></div></div>
+    </template>
+
+     <template id="my-doctors-page">
+        <div class="page"><header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm"><button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button><h1 class="text-2xl font-bold text-gray-800 ml-2">My Doctors</h1></header><div class="p-6 space-y-4"><div class="bg-white p-4 rounded-2xl shadow-sm flex items-center"><img src="https://placehold.co/60x60/E2E8F0/4A5568?text=VK" class="rounded-full mr-4"><div><p class="font-bold text-gray-800">Dr. Vikram Kumar</p><p class="text-sm text-gray-500">General Physician</p></div><button class="ml-auto bg-blue-100 text-blue-700 font-semibold px-4 py-2 rounded-full">Consult</button></div><div class="bg-white p-4 rounded-2xl shadow-sm flex items-center"><img src="https://placehold.co/60x60/E2E8F0/4A5568?text=AS" class="rounded-full mr-4"><div><p class="font-bold text-gray-800">Dr. Anita Sharma</p><p class="text-sm text-gray-500">Neurologist</p></div><button class="ml-auto bg-blue-100 text-blue-700 font-semibold px-4 py-2 rounded-full">Consult</button></div><button id="add-doctor-btn" class="w-full mt-4 bg-blue-600 text-white font-semibold py-3 rounded-xl shadow-sm flex items-center justify-center"><i data-lucide="plus" class="w-5 h-5 mr-2"></i> Add New Doctor</button></div></div>
+    </template>
+    <template id="medicine-cabinet-page">
+        <div class="page"><header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm"><button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button><h1 class="text-2xl font-bold text-gray-800 ml-2">Medicine Cabinet</h1></header><div class="p-6"><div class="flex bg-gray-200 rounded-full p-1 mb-4"><button class="sub-tab-button flex-1 py-2 text-sm rounded-full active" data-tab="prescriptions">Prescriptions</button><button class="sub-tab-button flex-1 py-2 text-sm rounded-full" data-tab="medicines">Medicines</button><button class="sub-tab-button flex-1 py-2 text-sm rounded-full" data-tab="notes">Notes</button></div><div id="prescriptions-content" class="sub-tab-content space-y-3"><div class="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm"><div class="flex items-center"><i data-lucide="file-text" class="text-red-500 mr-3"></i><span>Dr_Sharma_Rx.pdf</span></div><i data-lucide="more-vertical" class="text-gray-400"></i></div><div class="bg-white p-3 rounded-xl flex items-center justify-between shadow-sm"><div class="flex items-center"><i data-lucide="file-text" class="text-red-500 mr-3"></i><span>Lab_Report_July.pdf</span></div><i data-lucide="more-vertical" class="text-gray-400"></i></div><button id="upload-prescription-btn" class="w-full mt-4 bg-blue-100 text-blue-700 font-semibold py-3 rounded-xl flex items-center justify-center"><i data-lucide="upload" class="w-5 h-5 mr-2"></i> Upload Prescription</button></div><div id="medicines-content" class="sub-tab-content hidden space-y-3"><div class="bg-white p-3 rounded-xl shadow-sm"><p class="font-bold">Metformin</p><p class="text-sm text-gray-500">500mg - 1 tablet after dinner</p></div><div class="bg-white p-3 rounded-xl shadow-sm"><p class="font-bold">Paracetamol</p><p class="text-sm text-gray-500">650mg - As needed for fever</p></div><button id="add-medicine-btn" class="w-full mt-4 bg-blue-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center"><i data-lucide="plus" class="w-5 h-5 mr-2"></i> Add New Medicine</button></div><div id="notes-content" class="sub-tab-content hidden space-y-3"><div class="bg-white p-3 rounded-xl shadow-sm"><p class="font-bold">Follow-up with Dr. Sharma</p><p class="text-sm text-gray-500">Next week, regarding the new medication plan.</p></div><button id="add-note-btn" class="w-full mt-4 bg-blue-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center"><i data-lucide="plus" class="w-5 h-5 mr-2"></i> Add New Note</button></div></div></div>
+    </template>
+    <template id="second-opinion-page">
+        <div class="page"><header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm"><button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button><h1 class="text-2xl font-bold text-gray-800 ml-2">Get a Second Opinion</h1></header><div class="p-6 space-y-4"><div class="bg-white p-4 rounded-2xl shadow-sm flex items-center"><img src="https://placehold.co/60x60/E2E8F0/4A5568?text=RG" class="rounded-full mr-4"><div><p class="font-bold text-gray-800">Dr. Rohan Gupta</p><p class="text-sm text-gray-500">Cardiologist</p></div><button class="ml-auto bg-blue-100 text-blue-700 font-semibold px-4 py-2 rounded-full">Consult</button></div><div class="bg-white p-4 rounded-2xl shadow-sm flex items-center"><img src="https://placehold.co/60x60/E2E8F0/4A5568?text=SM" class="rounded-full mr-4"><div><p class="font-bold text-gray-800">Dr. Sneha Mehta</p><p class="text-sm text-gray-500">Endocrinologist</p></div><button class="ml-auto bg-blue-100 text-blue-700 font-semibold px-4 py-2 rounded-full">Consult</button></div></div></div>
+    </template>
+     <template id="emergency-contacts-page">
+        <div class="page"><header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm"><button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button><h1 class="text-2xl font-bold text-gray-800 ml-2">Emergency Contacts</h1></header><div class="p-6 space-y-4"><div class="bg-white p-4 rounded-2xl shadow-sm flex items-center"><div class="w-12 h-12 bg-pink-100 text-pink-600 rounded-full flex items-center justify-center mr-4 font-bold text-lg">M</div><div><p class="font-bold text-gray-800">Mom</p><p class="text-sm text-gray-500">+91 98765 43210</p></div><button class="ml-auto text-gray-400"><i data-lucide="phone"></i></button></div><div class="bg-white p-4 rounded-2xl shadow-sm flex items-center"><div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mr-4 font-bold text-lg">D</div><div><p class="font-bold text-gray-800">Dad</p><p class="text-sm text-gray-500">+91 99988 77665</p></div><button class="ml-auto text-gray-400"><i data-lucide="phone"></i></button></div><button id="add-contact-btn" class="w-full mt-4 bg-blue-600 text-white font-semibold py-3 rounded-xl shadow-sm flex items-center justify-center"><i data-lucide="plus" class="w-5 h-5 mr-2"></i> Add New Contact</button></div></div>
+    </template>
+    <template id="contact-us-page">
+        <div class="page"><header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm"><button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button><h1 class="text-2xl font-bold text-gray-800 ml-2">Contact Us</h1></header><div class="p-6 text-center"><div class="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center"><img src="https://placehold.co/96x96/E2E8F0/4A5568?text=AT" class="rounded-full"></div><h2 class="text-2xl font-bold text-gray-800">Ayush Tiwari</h2><p class="text-gray-500 mb-6">Founder of Sukoon</p><div class="bg-white p-4 rounded-2xl shadow-sm text-left space-y-4"><div><div class="flex items-center"><i data-lucide="phone" class="w-5 h-5 mr-4 text-blue-500"></i><a href="tel:+919315728922" class="text-gray-800">+91 9315728922</a></div></div><div><div class="flex items-center"><i data-lucide="mail" class="w-5 h-5 mr-4 text-blue-500"></i><a href="mailto:contact@sukoon.care" class="text-gray-800">contact@sukoon.care</a></div></div></div></div></div>
+    </template>
+
+    <template id="connect-wearable-page">
+        <div class="page">
+            <header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm">
+                <button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button>
+                <h1 class="text-2xl font-bold text-gray-800 ml-2">Connect Wearable</h1>
+            </header>
+            <div class="p-6">
+            <div class="bg-white p-4 rounded-2xl shadow-sm mb-6 text-center">
+                <p class="text-gray-600">Status:</p>
+                <p id="connection-status" class="font-bold text-red-500">No Device Connected</p>
+            </div>
+            <div class="space-y-3">
+                <div class="bg-blue-50 p-4 rounded-2xl shadow-sm flex items-center justify-between border-2 border-blue-500">
+                    <div class="flex items-center"><i data-lucide="watch" class="w-8 h-8 mr-4 text-gray-700"></i><div><p class="font-semibold text-gray-800">Apple Watch Series 9</p><p class="text-sm text-blue-600">New device found</p></div></div>
+                    <button class="connect-btn bg-blue-600 text-white font-semibold px-4 py-1 rounded-full">Connect</button>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between">
+                    <div class="flex items-center"><i data-lucide="apple" class="w-8 h-8 mr-4"></i><div><p class="font-semibold text-gray-800">Apple Watch</p><p class="text-sm text-gray-500">Sync via HealthKit</p></div></div>
+                    <button class="connect-btn bg-blue-100 text-blue-700 font-semibold px-4 py-1 rounded-full">Connect</button>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between">
+                    <div class="flex items-center"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Samsung_Logotype.svg/2560px-Samsung_Logotype.svg.png" class="w-8 h-auto mr-4"><div><p class="font-semibold text-gray-800">Samsung Galaxy Watch</p><p class="text-sm text-gray-500">Sync via Google Fit</p></div></div>
+                    <button class="connect-btn bg-blue-100 text-blue-700 font-semibold px-4 py-1 rounded-full">Connect</button>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between">
+                    <div class="flex items-center"><i data-lucide="watch" class="w-8 h-8 mr-4 text-cyan-500"></i><div><p class="font-semibold text-gray-800">Fitbit</p><p class="text-sm text-gray-500">Direct Connection</p></div></div>
+                    <button class="connect-btn bg-blue-100 text-blue-700 font-semibold px-4 py-1 rounded-full">Connect</button>
+                </div>
+            </div>
+            </div>
+        </div>
+    </template>
+    
+    <template id="audio-call-template">
+        <div class="overlay absolute inset-0 bg-gray-800 text-white flex flex-col items-center justify-between p-8 z-50">
+            <div class="text-center mt-16">
+                <div id="call-avatar-container" class="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 font-bold text-4xl"></div>
+                <h2 id="call-name" class="text-3xl font-bold"></h2>
+                <p id="call-status" class="text-gray-300 mt-2">Ringing...</p>
+            </div>
+            <div class="flex justify-around w-full max-w-xs mb-8">
+                <div class="text-center"><button id="speaker-btn" class="call-btn bg-white/20 p-4 rounded-full"><i data-lucide="volume-2"></i></button><p class="text-xs mt-1">Speaker</p></div>
+                <div class="text-center"><button id="mute-btn" class="call-btn bg-white/20 p-4 rounded-full"><i data-lucide="mic-off"></i></button><p class="text-xs mt-1">Mute</p></div>
+                <div class="text-center"><button id="record-btn" class="call-btn bg-white/20 p-4 rounded-full"><i data-lucide="radio-tower"></i></button><p class="text-xs mt-1">Record</p></div>
+            </div>
+            <button id="end-call-btn" class="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center">
+                <i data-lucide="phone-off"></i>
+            </button>
+        </div>
+    </template>
+
+    <template id="video-call-template">
+        <div class="overlay absolute inset-0 bg-gray-900 text-white flex flex-col justify-between p-4 z-50">
+            <div class="absolute inset-0 flex items-center justify-center opacity-30">
+                <i id="video-call-bg-icon" class="w-48 h-48 text-gray-600"></i>
+            </div>
+            <div class="absolute top-4 right-4 w-28 h-40 bg-black rounded-lg overflow-hidden border-2 border-gray-600">
+                <video id="user-video" autoplay playsinline class="w-full h-full object-cover"></video>
+            </div>
+
+            <div class="relative text-left z-10">
+                 <h2 id="video-call-name" class="text-2xl font-bold"></h2>
+                 <p id="video-call-status" class="text-gray-300">Ringing...</p>
+            </div>
+
+            <div class="relative flex justify-center items-center space-x-6 z-10 mb-8">
+                <button class="bg-white/20 p-4 rounded-full"><i data-lucide="mic-off"></i></button>
+                <button id="end-video-call-btn" class="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center"><i data-lucide="phone-off"></i></button>
+                <button id="toggle-video-btn" class="call-btn bg-white/20 p-4 rounded-full"><i data-lucide="video-off"></i></button>
+            </div>
+        </div>
+    </template>
+    
+    <template id="camera-overlay-template">
+         <div class="overlay absolute inset-0 bg-black text-white flex flex-col z-50">
+            <video id="camera-preview" autoplay playsinline class="w-full h-full object-cover"></video>
+            <div class="absolute top-4 left-4"><button id="close-camera-btn"><i data-lucide="x"></i></button></div>
+            <div class="absolute bottom-8 left-0 right-0 flex justify-center items-center">
+                 <button id="capture-btn" class="w-20 h-20 bg-white rounded-full border-4 border-black"></button>
+            </div>
+         </div>
+    </template>
+    
+    <template id="confirmation-overlay-template">
+        <div class="overlay absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-8">
+            <div class="bg-white p-6 rounded-2xl shadow-xl text-center w-full max-w-sm">
+                <div class="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="check" class="w-8 h-8"></i>
+                </div>
+                <h3 id="confirmation-title" class="text-xl font-bold text-gray-800 mb-2">Success</h3>
+                <p id="confirmation-message" class="text-gray-600 mb-6">Your item has been added.</p>
+                <button id="close-confirmation-btn" class="w-full bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold">Okay</button>
+            </div>
+        </div>
+    </template>
+
+
+    <template id="ai-insights-page">
+        <div class="p-6 page">
+            <header class="flex items-center mb-6">
+                <button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button>
+                <h1 class="text-2xl font-bold text-gray-800 ml-2">AI Health Insights</h1>
+            </header>
+            <div class="space-y-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm">
+                    <div class="flex items-center mb-2">
+                        <i data-lucide="moon" class="text-blue-500 w-6 h-6 mr-3"></i>
+                        <h3 class="font-semibold text-gray-800">Sleep Disturbance</h3>
+                    </div>
+                    <p class="text-gray-600 text-sm">Our AI detected a heart rate spike at 3:14 AM last night, which could indicate disturbed sleep. This is often caused by late meals, stress, or caffeine. We recommend a 10-minute calming meditation before bed. Your coach has been notified.</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm">
+                    <div class="flex items-center mb-2">
+                        <i data-lucide="zap" class="text-yellow-500 w-6 h-6 mr-3"></i>
+                        <h3 class="font-semibold text-gray-800">Energy Level Forecast</h3>
+                    </div>
+                    <p class="text-gray-600 text-sm">Based on your recent sleep patterns and activity, your energy levels might dip around 4 PM today. A short walk or a healthy snack at 3:30 PM could help prevent this.</p>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <template id="meal-detail-page">
+        <div class="page">
+             <header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm">
+                <button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button>
+                <h1 class="text-2xl font-bold text-gray-800 ml-2" id="meal-name">Meal Details</h1>
+            </header>
+            <div class="p-6">
+                <div class="bg-white p-4 rounded-2xl shadow-sm mb-4">
+                    <div class="flex items-center justify-between">
+                         <h2 class="text-lg font-bold text-gray-800" id="meal-time"></h2>
+                         <p class="font-semibold text-green-600" id="meal-calories"></p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Why this meal for you?</h3>
+                    <p class="text-gray-600" id="meal-reason"></p>
+                </div>
+            </div>
+        </div>
+    </template>
+    
+    <template id="workout-detail-page">
+        <div class="page">
+            <header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm">
+                <button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button>
+                <h1 class="text-2xl font-bold text-gray-800 ml-2" id="workout-name">Workout Details</h1>
+            </header>
+            <div class="p-6">
+                <div class="bg-white p-4 rounded-2xl shadow-sm mb-4">
+                    <p class="text-gray-600" id="workout-details"></p>
+                </div>
+                <div id="workout-poses" class="space-y-3">
+                    </div>
+            </div>
+        </div>
+    </template>
+    
+    <template id="vital-detail-page">
+        <div class="page">
+             <header class="p-4 flex items-center sticky top-0 z-10 bg-white shadow-sm">
+                <button class="back-button-detail p-2 -ml-2"><i data-lucide="arrow-left"></i></button>
+                <h1 class="text-2xl font-bold text-gray-800 ml-2" id="vital-title"></h1>
+            </header>
+            <div class="p-6">
+                <div id="vital-current-card" class="bg-white p-4 rounded-2xl shadow-sm mb-6">
+                    <div class="flex items-center mb-2"><i id="vital-icon" class="w-6 h-6 mr-3"></i><h3 class="font-semibold text-gray-800">Current Reading</h3></div>
+                    <p class="text-3xl font-bold text-gray-900" id="vital-current-value"></p>
+                    <p class="text-sm text-gray-500" id="vital-normal-range"></p>
+                </div>
+
+                <div class="bg-white p-4 rounded-2xl shadow-sm mb-6">
+                     <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-lg text-gray-700">Trends</h3>
+                        <div class="flex bg-gray-200 rounded-full p-1 text-sm">
+                            <button class="graph-tab px-3 py-1 rounded-full active" data-period="D">D</button>
+                            <button class="graph-tab px-3 py-1 rounded-full" data-period="W">W</button>
+                            <button class="graph-tab px-3 py-1 rounded-full" data-period="M">M</button>
+                        </div>
+                     </div>
+                     <div id="graph-container" class="h-40 flex items-end justify-around border-b border-gray-200 pb-2"></div>
+                     <div id="graph-labels" class="h-6 flex justify-around text-xs text-gray-500 pt-1"></div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white p-3 rounded-2xl shadow-sm text-center"><p class="text-sm text-gray-500">Avg</p><p id="vital-stat-avg" class="font-bold text-lg text-gray-800"></p></div>
+                    <div class="bg-white p-3 rounded-2xl shadow-sm text-center"><p class="text-sm text-gray-500">High</p><p id="vital-stat-high" class="font-bold text-lg text-gray-800"></p></div>
+                    <div class="bg-white p-3 rounded-2xl shadow-sm text-center"><p class="text-sm text-gray-500">Low</p><p id="vital-stat-low" class="font-bold text-lg text-gray-800"></p></div>
+                </div>
+
+                <div class="bg-blue-50 text-blue-800 p-4 rounded-2xl flex items-start"><i data-lucide="brain-circuit" class="w-8 h-8 mr-3 mt-1 flex-shrink-0"></i><div><h3 class="font-bold">AI Insight</h3><p class="text-sm" id="vital-ai-insight"></p></div></div>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const appContainer = document.getElementById('app-container');
+            const overlayContainer = document.getElementById('overlay-container');
+            let currentPage = 'splash';
+            let currentCoachData = null;
+            let mediaStream = null;
+            const pageHistory = [];
+            
+            const ringingAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAM9/f/9/f/");
+            const beepAudio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' + '9vT19/9v/d/+//7/Io8PD/8PD/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9v/b/9-");
+
+            const templates = {
+                splash: document.getElementById('splash-screen-template').innerHTML,
+                login: document.getElementById('login-screen-template').innerHTML,
+                'email-login': document.getElementById('email-login-template').innerHTML,
+                'phone-login': document.getElementById('phone-login-template').innerHTML,
+                'otp': document.getElementById('otp-template').innerHTML,
+                main: document.getElementById('main-app-template').innerHTML,
+                home: document.getElementById('home-page').innerHTML,
+                plan: document.getElementById('plan-page').innerHTML,
+                'coach-list': document.getElementById('coach-list-page').innerHTML,
+                'coach-chat': document.getElementById('coach-chat-page').innerHTML,
+                vitals: document.getElementById('vitals-page').innerHTML,
+                'vital-detail': document.getElementById('vital-detail-page').innerHTML,
+                profile: document.getElementById('profile-page').innerHTML,
+                'my-doctors': document.getElementById('my-doctors-page').innerHTML,
+                'medicine-cabinet': document.getElementById('medicine-cabinet-page').innerHTML,
+                'second-opinion': document.getElementById('second-opinion-page').innerHTML,
+                'emergency-contacts': document.getElementById('emergency-contacts-page').innerHTML,
+                'contact-us': document.getElementById('contact-us-page').innerHTML,
+                'connect-wearable': document.getElementById('connect-wearable-page').innerHTML,
+                'ai-insights': document.getElementById('ai-insights-page').innerHTML,
+                'meal-detail': document.getElementById('meal-detail-page').innerHTML,
+                'workout-detail': document.getElementById('workout-detail-page').innerHTML,
+                'audio-call': document.getElementById('audio-call-template').innerHTML,
+                'video-call': document.getElementById('video-call-template').innerHTML,
+                'camera-overlay': document.getElementById('camera-overlay-template').innerHTML,
+                'confirmation-overlay': document.getElementById('confirmation-overlay-template').innerHTML,
+            };
+
+            const vitalsData = {
+                'heart-rate': { title: 'Heart Rate', icon: 'heart-pulse', color: 'text-red-500', barColor: '#f87171', unit: 'bpm', range: 'Normal: 60-100 bpm', current: '68', stats: { avg: '72', high: '110', low: '58' }, insight: 'Your average heart rate is within the healthy range. The spike at 2 PM corresponds with your workout session.', data: { d: [40, 50, 45, 60, 80, 70], w: [60, 65, 62, 70, 68, 72, 70], m: [75, 72, 70, 68, 73, 75, 71] }},
+                'blood-oxygen': { title: 'Blood Oxygen', icon: 'wind', color: 'text-blue-500', barColor: '#60a5fa', unit: '%', range: 'Normal: 95-100%', current: '98', stats: { avg: '97.5', high: '99', low: '96' }, insight: 'Your blood oxygen levels are consistently excellent, indicating healthy lung function.', data: { d: [98, 99, 97, 98, 99, 98], w: [98, 97, 98, 99, 97, 98, 99], m: [98, 98, 99, 97, 98, 99, 98] }},
+                'sleep': { title: 'Sleep', icon: 'bed-double', color: 'text-indigo-500', barColor: '#818cf8', unit: 'h', range: 'Recommended: 7-9h', current: '7.8', stats: { avg: '7.2', high: '8.5', low: '6.1' }, insight: 'Your sleep duration is good, but we noticed several disturbances. Try to avoid screen time before bed.', data: { d: [7, 8, 6, 7.5, 8.2, 6.5], w: [7, 8, 6.5, 7.2, 8, 7.5, 6.8], m: [7.1, 7.5, 6.9, 7.8, 8, 7.2, 7.4] }},
+                'stress': { title: 'Stress', icon: 'brain', color: 'text-yellow-500', barColor: '#facc15', unit: '', range: 'Levels: Low, Med, High', current: 'Low', stats: { avg: 'Low', high: 'Med', low: 'Low' }, insight: 'Your stress levels have been mostly low. The brief spike on Wednesday afternoon has resolved.', data: { d: [20, 30, 25, 60, 30, 20], w: [25, 30, 55, 40, 35, 20, 22], m: [30, 35, 28, 40, 50, 30, 33] }},
+                'body-temp': { title: 'Body Temp', icon: 'thermometer', color: 'text-orange-500', barColor: '#fb923c', unit: '°C', range: 'Normal: 36.1-37.2°C', current: '36.8', stats: { avg: '36.7', high: '37.1', low: '36.5' }, insight: 'Your body temperature is stable and in the normal range.', data: { d: [36.8, 36.9, 37.0, 36.8, 36.7, 36.8], w: [36.7, 36.8, 36.9, 37.0, 36.8, 36.7, 36.6], m: [36.8, 36.7, 36.9, 37.0, 36.8, 36.9, 36.7] }},
+                'respiration': { title: 'Respiration', icon: 'lungs', color: 'text-green-500', barColor: '#4ade80', unit: 'br/min', range: 'Normal: 12-20 br/min', current: '16', stats: { avg: '17', high: '19', low: '15' }, insight: 'Your breathing rate is normal and consistent, even during sleep.', data: { d: [16, 17, 16, 18, 17, 16], w: [16, 17, 18, 16, 17, 18, 17], m: [17, 16, 18, 17, 16, 18, 17] }}
+            };
+
+            function renderScreen(screenName, data = {}) {
+                appContainer.innerHTML = templates[screenName];
+                lucide.createIcons();
+                currentPage = screenName;
+                
+                if (screenName === 'login') setupLoginListeners();
+                if (screenName === 'email-login') setupEmailLoginListeners(data);
+                if (screenName === 'phone-login') setupPhoneLoginListeners();
+                if (screenName === 'otp') setupOtpListeners();
+                if (screenName === 'main') {
+                    setupMainAppListeners();
+                    navigateTo(data.startPage || 'home');
+                }
+            }
+
+            function renderOverlay(templateName, data = {}) {
+                overlayContainer.innerHTML = templates[templateName];
+                lucide.createIcons();
+                if(templateName === 'audio-call') setupAudioCallPage(data);
+                if(templateName === 'video-call') setupVideoCallPage(data);
+                if(templateName === 'camera-overlay') setupCameraOverlay();
+            }
+            
+            function showConfirmationOverlay(title, message) {
+                overlayContainer.innerHTML = templates['confirmation-overlay'];
+                document.getElementById('confirmation-title').textContent = title;
+                document.getElementById('confirmation-message').textContent = message;
+                lucide.createIcons();
+                document.getElementById('close-confirmation-btn').addEventListener('click', closeOverlay);
+            }
+
+            function closeOverlay() {
+                 if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                }
+                overlayContainer.innerHTML = '';
+            }
+
+            function navigateTo(page, data = {}) {
+                if (currentPage !== page && currentPage !== 'main') {
+                    pageHistory.push(currentPage);
+                }
+                const mainContent = document.getElementById('main-content');
+                if (!mainContent) return;
+                
+                currentPage = page;
+                if(page === 'coach-chat') currentCoachData = data;
+
+                mainContent.innerHTML = templates[page] || '';
+                lucide.createIcons();
+                
+                updateNavActiveState(page);
+                
+                if (page === 'home') setupHomeAndPlanItemListeners();
+                if (page === 'plan') setupPlanTabs();
+                if (page === 'profile') setupProfileListeners();
+                if (page === 'coach-list') setupCoachListListeners();
+                if (page === 'coach-chat') setupChatPage(data);
+                if (page === 'vitals') setupVitalsPage();
+                if (page === 'vital-detail') setupVitalDetailPage(data);
+                if (page === 'connect-wearable') setupConnectWearableListeners();
+                if (page === 'my-doctors') setupMyDoctorsPage();
+                if (page === 'second-opinion') setupDetailPage(()=>navigateTo('profile'));
+                if (page === 'emergency-contacts') setupEmergencyContactsPage();
+                if (page === 'contact-us') setupDetailPage(()=>navigateTo('profile'));
+                if (page === 'medicine-cabinet') setupMedicineCabinetPage();
+                if (page === 'ai-insights') setupDetailPage(goBack);
+                if (page === 'meal-detail') setupMealDetailPage(data);
+                if (page === 'workout-detail') setupWorkoutDetailPage(data);
+            }
+
+            function goBack() {
+                const previousPage = pageHistory.pop() || 'home';
+                if (['meal-detail', 'workout-detail', 'ai-insights', 'vital-detail'].includes(previousPage)) {
+                    const lastMainPage = pageHistory.find(p => !['meal-detail', 'workout-detail', 'ai-insights', 'vital-detail'].includes(p)) || 'home';
+                    navigateTo(lastMainPage);
+                } else {
+                     navigateTo(previousPage);
+                }
+            }
+            
+            function updateNavActiveState(page) {
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    const pageName = item.dataset.page;
+                    const isCoachRelated = (page === 'coach-list' || page === 'coach-chat');
+                    const profilePages = ['profile', 'connect-wearable', 'my-doctors', 'medicine-cabinet', 'second-opinion', 'emergency-contacts', 'contact-us'];
+                    const isProfileRelated = profilePages.includes(page);
+                    
+                    if (pageName === 'coach-list') item.classList.toggle('active', isCoachRelated);
+                    else if (pageName === 'profile') item.classList.toggle('active', isProfileRelated);
+                    else if (pageName === 'vitals') item.classList.toggle('active', page === 'vitals' || page === 'vital-detail');
+                    else item.classList.toggle('active', pageName === page);
+                });
+            }
+
+            // --- LOGIN FLOW SETUP ---
+            function setupLoginListeners() {
+                document.getElementById('google-login-btn').addEventListener('click', () => renderScreen('email-login', { provider: 'Google' }));
+                document.getElementById('apple-login-btn').addEventListener('click', () => renderScreen('email-login', { provider: 'Apple' }));
+                document.getElementById('phone-login-btn').addEventListener('click', () => renderScreen('phone-login'));
+            }
+
+            function setupEmailLoginListeners(data) {
+                document.querySelector('.back-to-login').addEventListener('click', () => renderScreen('login'));
+                document.getElementById('email-provider-text').innerText = `to continue with ${data.provider}`;
+                const emailInput = document.getElementById('email-input');
+                const nextBtn = document.getElementById('email-next-btn');
+                nextBtn.disabled = true;
+                emailInput.addEventListener('input', () => {
+                    nextBtn.disabled = emailInput.value.trim() === '' || !emailInput.value.includes('@');
+                });
+                nextBtn.addEventListener('click', () => {
+                    if (!nextBtn.disabled) renderScreen('main');
+                });
+            }
+
+            function setupPhoneLoginListeners() {
+                document.querySelector('.back-to-login').addEventListener('click', () => renderScreen('login'));
+                const phoneInput = document.getElementById('phone-input');
+                const nextBtn = document.getElementById('phone-next-btn');
+                nextBtn.disabled = true;
+                phoneInput.addEventListener('input', () => {
+                    nextBtn.disabled = phoneInput.value.trim().length < 10;
+                });
+                nextBtn.addEventListener('click', () => {
+                    if (!nextBtn.disabled) renderScreen('otp', { phone: phoneInput.value });
+                });
+            }
+
+            function setupOtpListeners() {
+                document.querySelector('.back-to-phone-login').addEventListener('click', () => renderScreen('phone-login'));
+                const inputs = document.querySelectorAll('.otp-input');
+                const verifyBtn = document.getElementById('otp-next-btn');
+                verifyBtn.disabled = true;
+                inputs.forEach((input, index) => {
+                    input.addEventListener('input', () => {
+                        if (input.value.length >= 1 && index < inputs.length - 1) {
+                            inputs[index + 1].focus();
+                        }
+                        const isComplete = Array.from(inputs).every(i => i.value.length > 0);
+                        verifyBtn.disabled = !isComplete;
+                    });
+                     input.addEventListener('keydown', (e) => {
+                        if (e.key === "Backspace" && input.value.length === 0 && index > 0) {
+                            inputs[index - 1].focus();
+                        }
+                    });
+                });
+                 verifyBtn.addEventListener('click', () => {
+                    if (!verifyBtn.disabled) renderScreen('main');
+                });
+            }
+            
+            // --- EVENT LISTENER HELPERS ---
+            function setupHomeAndPlanItemListeners() {
+                 document.querySelectorAll('.plan-item-link').forEach(item => {
+                    item.addEventListener('click', e => {
+                        e.preventDefault();
+                        const page = item.dataset.page;
+                        const data = item.dataset.item ? JSON.parse(item.dataset.item) : {};
+                        navigateTo(page, data);
+                    });
+                });
+            }
+            
+            function setupDetailPage(backFunction) {
+                 document.querySelector('.back-button-detail').addEventListener('click', backFunction);
+            }
+
+            // --- PAGE-SPECIFIC SETUP ---
+            function setupMyDoctorsPage(){
+                setupDetailPage(()=>navigateTo('profile'));
+                document.getElementById('add-doctor-btn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showConfirmationOverlay('Doctor Added', 'The new doctor has been successfully added to your list.');
+                });
+            }
+
+            function setupEmergencyContactsPage(){
+                setupDetailPage(()=>navigateTo('profile'));
+                document.getElementById('add-contact-btn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showConfirmationOverlay('Contact Added', 'The new emergency contact has been saved.');
+                });
+            }
+
+            function setupVitalsPage() {
+                document.querySelectorAll('.vital-card').forEach(card => {
+                    card.addEventListener('click', e => {
+                        e.preventDefault();
+                        const vitalKey = card.dataset.vital;
+                        navigateTo('vital-detail', vitalsData[vitalKey]);
+                    });
+                });
+            }
+            
+            function setupVitalDetailPage(data) {
+                setupDetailPage(() => navigateTo('vitals'));
+                document.getElementById('vital-title').textContent = data.title;
+                const iconEl = document.getElementById('vital-icon');
+                iconEl.dataset.lucide = data.icon;
+                iconEl.className = `w-6 h-6 mr-3 ${data.color}`;
+                document.getElementById('vital-current-value').innerHTML = `${data.current} <span class="text-base font-normal">${data.unit}</span>`;
+                document.getElementById('vital-normal-range').textContent = data.range;
+                document.getElementById('vital-stat-avg').textContent = data.stats.avg;
+                document.getElementById('vital-stat-high').textContent = data.stats.high;
+                document.getElementById('vital-stat-low').textContent = data.stats.low;
+                document.getElementById('vital-ai-insight').textContent = data.insight;
+                
+                lucide.createIcons();
+
+                const renderGraph = (period) => {
+                    const graphContainer = document.getElementById('graph-container');
+                    const labelsContainer = document.getElementById('graph-labels');
+                    graphContainer.innerHTML = '';
+                    labelsContainer.innerHTML = '';
+
+                    const values = data.data[period.toLowerCase()];
+                    if (!values || !Array.isArray(values) || values.length === 0) return;
+
+                    const labels = {
+                        d: ['12am', '4am', '8am', '12pm', '4pm', '8pm'],
+                        w: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                        m: ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30']
+                    };
+
+                    const currentLabels = labels[period.toLowerCase()];
+                    
+                    const maxVal = Math.max(...values);
+                    values.forEach(value => {
+                        const bar = document.createElement('div');
+                        const height = maxVal > 0 ? (value / maxVal * 100) : 0;
+                        bar.className = 'w-1/12 rounded-t-sm';
+                        bar.style.height = `${height}%`;
+                        bar.style.backgroundColor = data.barColor;
+                        graphContainer.appendChild(bar);
+                    });
+
+                    currentLabels.forEach(label => {
+                        const labelEl = document.createElement('div');
+                        labelEl.className = 'flex-1 text-center';
+                        labelEl.textContent = label;
+                        labelsContainer.appendChild(labelEl);
+                    });
+                };
+                
+                renderGraph('D');
+
+                document.querySelectorAll('.graph-tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        document.querySelectorAll('.graph-tab').forEach(t => t.classList.remove('active'));
+                        e.currentTarget.classList.add('active');
+                        renderGraph(e.currentTarget.dataset.period);
+                    });
+                });
+            }
+            
+            function setupMedicineCabinetPage() {
+                setupDetailPage(()=>navigateTo('profile'));
+                const tabButtons = document.querySelectorAll('.sub-tab-button');
+                const tabContents = document.querySelectorAll('.sub-tab-content');
+                tabButtons.forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        tabButtons.forEach(btn => btn.classList.remove('active'));
+                        e.currentTarget.classList.add('active');
+                        tabContents.forEach(content => content.classList.add('hidden'));
+                        document.getElementById(`${e.currentTarget.dataset.tab}-content`).classList.remove('hidden');
+                    });
+                });
+
+                document.getElementById('upload-prescription-btn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showConfirmationOverlay('Prescription Uploaded', 'Your prescription is now available in the app.');
+                });
+                document.getElementById('add-medicine-btn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showConfirmationOverlay('Medicine Added', 'The new medicine has been added to your cabinet.');
+                });
+                document.getElementById('add-note-btn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showConfirmationOverlay('Note Saved', 'Your note has been successfully saved.');
+                });
+            }
+
+            function setupMealDetailPage(data) {
+                setupDetailPage(goBack);
+                document.getElementById('meal-name').innerText = data.name;
+                document.getElementById('meal-time').innerText = data.time;
+                document.getElementById('meal-calories').innerText = data.calories;
+                document.getElementById('meal-reason').innerText = data.details;
+            }
+            
+            function setupWorkoutDetailPage(data) {
+                 setupDetailPage(goBack);
+                 document.getElementById('workout-name').innerText = data.name;
+                 document.getElementById('workout-details').innerText = data.details;
+                 const posesContainer = document.getElementById('workout-poses');
+                 posesContainer.innerHTML = '';
+                 data.poses.forEach(pose => {
+                     const poseEl = document.createElement('div');
+                     poseEl.className = 'bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between';
+                     poseEl.innerHTML = `<div><p class="font-bold text-gray-800">${pose.name}</p><p class="text-gray-600">${pose.duration}</p></div><i data-lucide="play-circle" class="text-blue-500 w-8 h-8"></i>`;
+                     posesContainer.appendChild(poseEl);
+                 });
+                 lucide.createIcons();
+            }
+
+            function setupMainAppListeners() {
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        navigateTo(item.dataset.page);
+                    });
+                });
+                setupSosButton();
+            }
+
+            function setupProfileListeners() {
+                document.querySelectorAll('.profile-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        navigateTo(item.dataset.page);
+                    });
+                });
+                document.getElementById('logout-button').addEventListener('click', () => {
+                    renderScreen('login');
+                });
+            }
+            
+            function setupCoachListListeners() {
+                document.querySelectorAll('.coach-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const coachData = JSON.parse(item.dataset.coach);
+                        navigateTo('coach-chat', coachData);
+                    });
+                });
+            }
+            
+            // --- CHAT AND CALLS ---
+            function addMessageToChat(message, isUser = true, type = 'text') {
+                const chatHistory = document.getElementById('chat-history');
+                if (!chatHistory) return;
+
+                const messageDiv = document.createElement('div');
+                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                let content = '';
+                if(type === 'text') {
+                    content = `<p>${message}</p>`;
+                } else if (type === 'voice') {
+                    content = `<div class="flex items-center"><i data-lucide="play" class="mr-2"></i> Voice Note (0:${message})</div>`;
+                } else if (type === 'image') {
+                    content = `<div class="flex items-center text-sm"><i data-lucide="image" class="mr-2"></i> ${message}</div>`;
+                }
+                else {
+                    content = `<div class="flex items-center text-sm"><i data-lucide="file" class="mr-2"></i> ${message}</div>`;
+                }
+
+                if (isUser) {
+                    messageDiv.className = 'flex justify-end';
+                    messageDiv.innerHTML = `<div class="bg-blue-600 text-white p-3 rounded-2xl rounded-br-lg max-w-xs">${content}<p class="text-xs text-blue-200 text-right mt-1">${time}</p></div>`;
+                } else { // System message
+                    messageDiv.className = 'text-center text-xs text-gray-500 py-2';
+                    messageDiv.innerHTML = `${message} at ${time}`;
+                }
+                chatHistory.appendChild(messageDiv);
+                lucide.createIcons();
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
+
+            function setupChatPage(coachData) {
+                currentCoachData = coachData;
+                document.getElementById('chat-name').innerText = coachData.name;
+                document.getElementById('chat-status').innerText = coachData.title;
+                document.getElementById('chat-avatar').src = `https://placehold.co/40x40/E2E8F0/4A5568?text=${coachData.avatar}`;
+                document.querySelector('.back-button-chat').addEventListener('click', () => navigateTo('coach-list'));
+
+                const chatInput = document.getElementById('chat-input');
+                const sosContainer = document.getElementById('sos-button-container');
+                const micOrSendBtn = document.getElementById('mic-or-send-btn');
+                const voiceNoteUI = document.getElementById('voice-note-ui');
+                const textInputUI = document.getElementById('text-input-ui');
+                let voiceTimer;
+
+                chatInput.addEventListener('focus', () => { sosContainer.classList.add('keyboard-visible'); });
+                chatInput.addEventListener('blur', () => { sosContainer.classList.remove('keyboard-visible'); });
+                
+                chatInput.addEventListener('input', () => {
+                    if (chatInput.value.trim()) {
+                        micOrSendBtn.innerHTML = '<i data-lucide="send" class="w-5 h-5"></i>';
+                    } else {
+                        micOrSendBtn.innerHTML = '<i data-lucide="mic" class="w-5 h-5"></i>';
+                    }
+                    lucide.createIcons();
+                });
+                
+                micOrSendBtn.addEventListener('click', () => {
+                    const message = chatInput.value.trim();
+                    if (message) {
+                        addMessageToChat(message, true, 'text');
+                        chatInput.value = '';
+                        micOrSendBtn.innerHTML = '<i data-lucide="mic" class="w-5 h-5"></i>';
+                        lucide.createIcons();
+                    } else {
+                        textInputUI.classList.add('hidden');
+                        voiceNoteUI.classList.remove('hidden');
+                        voiceNoteUI.classList.add('flex');
+                        sosContainer.classList.add('recording');
+                        let seconds = 0;
+                        const timerEl = document.getElementById('voice-note-timer');
+                        timerEl.textContent = '00:00';
+                        voiceTimer = setInterval(() => {
+                            seconds++;
+                            const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+                            const sec = (seconds % 60).toString().padStart(2, '0');
+                            timerEl.textContent = `${min}:${sec}`;
+                        }, 1000);
+                    }
+                });
+                
+                const stopRecording = (send) => {
+                    clearInterval(voiceTimer);
+                    if (send) {
+                        const duration = document.getElementById('voice-note-timer').textContent.split(':')[1];
+                        addMessageToChat(duration, true, 'voice');
+                    }
+                    voiceNoteUI.classList.add('hidden');
+                    voiceNoteUI.classList.remove('flex');
+                    textInputUI.classList.remove('hidden');
+                    sosContainer.classList.remove('recording');
+                };
+
+                document.getElementById('stop-record-btn').addEventListener('click', () => stopRecording(true));
+                document.getElementById('delete-record-btn').addEventListener('click', () => stopRecording(false));
+
+                document.getElementById('attach-btn').addEventListener('click', () => document.getElementById('file-input').click());
+                document.getElementById('camera-btn').addEventListener('click', () => renderOverlay('camera-overlay'));
+
+                document.getElementById('file-input').addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        addMessageToChat(e.target.files[0].name, true, 'file');
+                    }
+                });
+
+                document.getElementById('audio-call-btn').addEventListener('click', () => renderOverlay('audio-call', coachData));
+                document.getElementById('video-call-btn').addEventListener('click', () => renderOverlay('video-call', coachData));
+            }
+            
+            function setupAudioCallPage(coachData) {
+                document.getElementById('call-name').innerText = coachData.name;
+                const avatarContainer = document.getElementById('call-avatar-container');
+                const callStatus = document.getElementById('call-status');
+                const avatarColor = coachData.color;
+                if (avatarColor) avatarContainer.classList.add(avatarColor);
+                avatarContainer.innerText = coachData.avatar;
+                
+                ringingAudio.loop = true;
+                const playPromise = ringingAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => { if(e.name !== "AbortError") console.error("Audio play failed:", e); });
+                }
+
+                document.getElementById('end-call-btn').addEventListener('click', () => {
+                    ringingAudio.pause();
+                    ringingAudio.currentTime = 0;
+                    closeOverlay();
+                    addMessageToChat('Audio call ended', false);
+                });
+
+                ['speaker-btn', 'mute-btn', 'record-btn'].forEach(id => {
+                    document.getElementById(id).addEventListener('click', (e) => {
+                        beepAudio.play().catch(e => {});
+                        const btn = e.currentTarget;
+                        btn.classList.toggle('active');
+                        const action = id.split('-')[0];
+                        const isActive = btn.classList.contains('active');
+                        callStatus.textContent = `${action.charAt(0).toUpperCase() + action.slice(1)} ${isActive ? 'On' : 'Off'}`;
+                    });
+                });
+            }
+
+            async function setupVideoCallPage(coachData) {
+                document.getElementById('video-call-name').innerText = coachData.name;
+                document.getElementById('video-call-bg-icon').dataset.lucide = "user-circle-2";
+                lucide.createIcons();
+
+                const videoElement = document.getElementById('user-video');
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    videoElement.srcObject = mediaStream;
+                } catch (err) {
+                    console.error("Camera access denied:", err);
+                    videoElement.parentNode.innerHTML = `<div class="w-full h-full flex items-center justify-center text-center text-xs text-red-400 p-2">Camera access denied.</div>`;
+                }
+                
+                ringingAudio.loop = true;
+                const playPromise = ringingAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => { if(e.name !== "AbortError") console.error("Audio play failed:", e); });
+                }
+                
+                document.getElementById('toggle-video-btn').addEventListener('click', (e) => {
+                    beepAudio.play();
+                    const btn = e.currentTarget;
+                    const icon = btn.querySelector('i');
+                    if (mediaStream) {
+                        const videoTrack = mediaStream.getVideoTracks()[0];
+                        videoTrack.enabled = !videoTrack.enabled;
+                        btn.classList.toggle('active');
+                        icon.dataset.lucide = videoTrack.enabled ? 'video-off' : 'video';
+                        lucide.createIcons();
+                    }
+                });
+
+                document.getElementById('end-video-call-btn').addEventListener('click', () => {
+                    ringingAudio.pause();
+                    ringingAudio.currentTime = 0;
+                    closeOverlay();
+                    addMessageToChat('Video call ended', false);
+                });
+            }
+            
+            async function setupCameraOverlay() {
+                const videoElement = document.getElementById('camera-preview');
+                document.getElementById('close-camera-btn').addEventListener('click', closeOverlay);
+                 try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                    videoElement.srcObject = mediaStream;
+                } catch (err) {
+                    console.error("Camera access denied:", err);
+                    overlayContainer.innerHTML = `<div class="w-full h-full flex items-center justify-center text-center text-lg text-white p-4">Camera access was denied.</div>`;
+                     setTimeout(closeOverlay, 2000);
+                }
+
+                document.getElementById('capture-btn').addEventListener('click', () => {
+                    addMessageToChat('Photo.jpg', true, 'image');
+                    closeOverlay();
+                });
+            }
+
+            function setupConnectWearableListeners() {
+                setupDetailPage(() => navigateTo('profile'));
+                const connectBtns = document.querySelectorAll('.connect-btn');
+                const statusEl = document.getElementById('connection-status');
+
+                connectBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        // Reset all other buttons
+                        connectBtns.forEach(b => {
+                            if (b !== btn) {
+                                b.classList.remove('bg-green-500', 'text-white');
+                                if (!b.classList.contains('bg-blue-600')) { // Don't reset the primary new device button styling
+                                    b.classList.add('bg-blue-100', 'text-blue-700');
+                                }
+                                b.textContent = 'Connect';
+                                b.disabled = false;
+                            }
+                        });
+
+                        btn.textContent = 'Connecting...';
+                        btn.disabled = true;
+
+                        setTimeout(() => {
+                            btn.classList.remove('bg-blue-100', 'text-blue-700', 'bg-blue-600');
+                            btn.classList.add('bg-green-500', 'text-white');
+                            btn.textContent = 'Connected';
+                            statusEl.textContent = 'Device Connected';
+                            statusEl.classList.remove('text-red-500');
+                            statusEl.classList.add('text-green-500');
+                        }, 1500);
+                    });
+                });
+            }
+
+            function setupPlanTabs() {
+                const mainTabButtons = document.querySelectorAll('.tab-button');
+                const mainTabContents = document.querySelectorAll('.tab-content');
+                mainTabButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        mainTabButtons.forEach(btn => { 
+                            btn.classList.remove('text-blue-600', 'border-blue-600'); 
+                            btn.classList.add('text-gray-500'); 
+                        });
+                        mainTabContents.forEach(content => content.classList.add('hidden'));
+                        button.classList.add('text-blue-600', 'border-blue-600');
+                        document.getElementById(`${button.dataset.tab}-content`).classList.remove('hidden');
+                    });
+                });
+                
+                setupHomeAndPlanItemListeners();
+            }
+
+            function setupSosButton() {
+                const sosButton = document.getElementById('sos-button');
+                const sosProgress = document.getElementById('sos-progress');
+                const messageBox = document.getElementById('message-box');
+                const closeMessageBox = document.getElementById('close-message-box');
+                let pressTimer;
+
+                const startPress = (e) => { e.preventDefault(); sosProgress.style.width = '100%'; pressTimer = setTimeout(() => messageBox.classList.remove('hidden'), 500); };
+                const endPress = () => { clearTimeout(pressTimer); sosProgress.style.width = '0%'; };
+
+                sosButton.addEventListener('mousedown', startPress);
+                sosButton.addEventListener('mouseup', endPress);
+                sosButton.addEventListener('mouseleave', endPress);
+                sosButton.addEventListener('touchstart', startPress);
+                sosButton.addEventListener('touchend', endPress);
+                closeMessageBox.addEventListener('click', () => messageBox.classList.add('hidden'));
+            }
+
+            function startApp() {
+                renderScreen('splash');
+                setTimeout(() => {
+                    renderScreen('login');
+                }, 1500);
+            }
+
+            startApp();
+        });
+    </script>
+</body>
+</html>
